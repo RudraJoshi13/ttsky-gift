@@ -45,10 +45,10 @@ jobs:
           echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
           APPIMAGE_EXTRACT_AND_RUN=1 bin/bambu --version
 
-      - name: Install Verilator and libtinfo5 (for Bambu's testbench build)
+      - name: Install Verilator, libtinfo5 and multilib headers (for Bambu's testbench build)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q verilator libtinfo5
+          sudo apt-get install -y -q verilator libtinfo5 gcc-multilib g++-multilib
           verilator --version
 
       - name: Write the testbench inputs (3 official + 5 random vectors)
