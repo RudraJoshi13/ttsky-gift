@@ -30,12 +30,19 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: curl -fL --retry 3 -o bambu.AppImage "https://release.bambuhls.eu/bambu-${BAMBU_VERSION}.AppImage"
 
-      - name: Unpack Bambu and print its version
+      - name: Set up the bambu command and print its version
+        # Run the AppImage the way Bambu's own CI does: through a link named
+        # "bambu", because the launcher inside the AppImage picks the tool from
+        # the name it was called with. APPIMAGE_EXTRACT_AND_RUN=1 lets it run
+        # without FUSE, which this runner does not have.
         run: |
           sha256sum bambu.AppImage
           chmod +x bambu.AppImage
-          ./bambu.AppImage --appimage-extract > /dev/null
-          ./squashfs-root/AppRun --version
+          mkdir -p bin
+          ln -sf "$PWD/bambu.AppImage" bin/bambu
+          echo "$PWD/bin" >> "$GITHUB_PATH"
+          echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
+          APPIMAGE_EXTRACT_AND_RUN=1 bin/bambu --version
 
       - name: Install Verilator (simulator for Bambu's generated testbench)
         run: |
@@ -50,7 +57,7 @@ jobs:
         run: |
           mkdir -p hls_out
           cd hls_out
-          ../squashfs-root/AppRun ../hls/gift64_hls.c \
+          bambu ../hls/gift64_hls.c \
             --top-fname=gift64_enc \
             --device-name=nangate45 \
             --clock-period=20 \
