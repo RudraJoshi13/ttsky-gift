@@ -1,0 +1,74 @@
+# High-level synthesis of the GIFT-64-128 reference C code with Bambu (PandA).
+# Runs only when started by hand (Actions tab > hls > Run workflow), so it never
+# runs on a normal push and does not affect the Tiny Tapeout gds/test/docs runs.
+#
+# Bambu ships only x86_64 Linux builds, so it runs here on GitHub's Ubuntu runner.
+
+name: hls
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bambu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BAMBU_VERSION: "2024.10"
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v6
+
+      - name: Cache the Bambu AppImage (about 1.3 GB)
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: bambu.AppImage
+          key: bambu-${{ env.BAMBU_VERSION }}
+
+      - name: Download Bambu ${{ env.BAMBU_VERSION }}
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: curl -fL --retry 3 -o bambu.AppImage "https://release.bambuhls.eu/bambu-${BAMBU_VERSION}.AppImage"
+
+      - name: Unpack Bambu and print its version
+        run: |
+          sha256sum bambu.AppImage
+          chmod +x bambu.AppImage
+          ./bambu.AppImage --appimage-extract > /dev/null
+          ./squashfs-root/AppRun --version
+
+      - name: Install Verilator (simulator for Bambu's generated testbench)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q verilator
+          verilator --version
+
+      - name: Write the testbench inputs (3 official + 5 random vectors)
+        run: python3 hls/gen_tb_xml.py
+
+      - name: Run Bambu (C to Verilog, then simulate the Verilog)
+        run: |
+          mkdir -p hls_out
+          cd hls_out
+          ../squashfs-root/AppRun ../hls/gift64_hls.c \
+            --top-fname=gift64_enc \
+            --device-name=nangate45 \
+            --clock-period=20 \
+            -O2 \
+            --generate-tb=../hls/test.xml \
+            --simulate --simulator=VERILATOR \
+            -v3 2>&1 | tee bambu.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Summary (cycles and any errors)
+        if: always()
+        run: grep -i -E "cycles|error|mismatch|fail" hls_out/bambu.log | tail -40 || true
+
+      - name: Upload Bambu outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hls_out
+          path: |
+            hls_out
+            hls/test.xml
