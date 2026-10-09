@@ -1,6 +1,6 @@
 # Tiny Tapeout project information
 project:
-  title:        "GIFT-64 Lightweight Block Cipher"      # Project title
+  title:        "GIFT-64 Lightweight Block Cipher (Bambu HLS)"      # Project title
   author:       "Rudra Joshi"      # Your name
   discord:      ""      # Your discord username, for communication and automatically assigning you a Tapeout role (optional)
   description:  "GIFT-64-128 encryption core behind a byte-wide register interface"      # One line description of what your project does
@@ -19,12 +19,7 @@ project:
   source_files:
     - "project.v"
     - "strobe_sync.v"
-    - "gift64_core.v"
-    - "gift_round.v"
-    - "gift_sbox.v"
-    - "gift_perm.v"
-    - "gift_key_update.v"
-    - "gift_rc_update.v"
+    - "gift64_top.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).

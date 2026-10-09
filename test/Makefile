@@ -6,7 +6,7 @@ SIM ?= icarus
 FST ?= -fst # Use more efficient FST format
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
-PROJECT_SOURCES = project.v strobe_sync.v gift64_core.v gift_round.v gift_sbox.v gift_perm.v gift_key_update.v gift_rc_update.v
+PROJECT_SOURCES = project.v strobe_sync.v gift64_top.v
 
 ifneq ($(GATES),yes)
 
@@ -41,5 +41,17 @@ TOPLEVEL = tb
 # List test modules to run, separated by commas and without the .py suffix:
 COCOTB_TEST_MODULES = test
 
+# The Bambu core loads its two ROM tables (S-box, round constants) from .mem
+# files with $readmemb. The simulator opens them relative to this folder, so
+# they are copied here from src/ before an RTL simulation (rule at the end of
+# this file). The gate-level netlist has the tables built in.
+ifneq ($(GATES),yes)
+CUSTOM_SIM_DEPS += hls_mem
+endif
+
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim
+
+.PHONY: hls_mem
+hls_mem:
+	cp -f $(SRC_DIR)/*.mem .
