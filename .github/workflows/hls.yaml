@@ -57,15 +57,20 @@ jobs:
         run: |
           mkdir -p hls_out
           cd hls_out
-          bambu ../hls/gift64_hls.c \
+          # The AppImage launcher changes into the folder named in OWD before
+          # starting bambu; set it here so bambu runs (and writes) in hls_out.
+          export OWD="$PWD"
+          bambu "$GITHUB_WORKSPACE/hls/gift64_hls.c" \
             --top-fname=gift64_enc \
             --device-name=nangate45 \
             --clock-period=20 \
             -O2 \
-            --generate-tb=../hls/test.xml \
+            --generate-tb="$GITHUB_WORKSPACE/hls/test.xml" \
             --simulate --simulator=VERILATOR \
             -v3 2>&1 | tee bambu.log
-          exit ${PIPESTATUS[0]}
+          status=${PIPESTATUS[0]}
+          ls -la
+          exit $status
 
       - name: Summary (cycles and any errors)
         if: always()
