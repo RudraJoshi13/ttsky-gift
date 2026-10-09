@@ -11,7 +11,8 @@ on:
 
 jobs:
   bambu:
-    runs-on: ubuntu-24.04
+    # Ubuntu 22.04: Bambu's bundled clang-16 needs libtinfo.so.5, which 24.04 no longer ships.
+    runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
       BAMBU_VERSION: "2024.10"
@@ -44,10 +45,10 @@ jobs:
           echo "APPIMAGE_EXTRACT_AND_RUN=1" >> "$GITHUB_ENV"
           APPIMAGE_EXTRACT_AND_RUN=1 bin/bambu --version
 
-      - name: Install Verilator (simulator for Bambu's generated testbench)
+      - name: Install Verilator and libtinfo5 (for Bambu's testbench build)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q verilator
+          sudo apt-get install -y -q verilator libtinfo5
           verilator --version
 
       - name: Write the testbench inputs (3 official + 5 random vectors)
