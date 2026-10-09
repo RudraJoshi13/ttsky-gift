@@ -1,4 +1,9 @@
-"""Write hls/test.xml, the input list for Bambu's generated testbench.
+"""Write hls/test.xml and hls/test_top.xml, the input lists for Bambu's
+generated testbench.
+
+test.xml     is for gift64_enc(input[16], masterkey[32])   (gift64_hls.c)
+test_top.xml is for gift64_top(pt, key_hi, key_lo)         (gift64_hls_opt.c)
+Both contain the same 8 vectors.
 
 Bambu runs gift64_enc() twice for every <testbench> line: once as compiled C
 and once as the generated Verilog in a simulator, and reports a mismatch if
@@ -41,6 +46,19 @@ def main():
         lines.append(f'  <testbench input="{nibbles(pt, 16)}" masterkey="{nibbles(key, 32)}"/>')
     lines.append("</function>")
     out = os.path.join(HERE, "test.xml")
+    with open(out, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"wrote {out}: {len(vectors)} vectors")
+
+    # Same vectors for the 64-bit top function. Bambu pastes these values into
+    # C code, so they are written as hexadecimal unsigned long long literals.
+    lines = ['<?xml version="1.0"?>', "<function>"]
+    for name, pt, key, ct in vectors:
+        lines.append(f"  <!-- {name}: expected ct={ct:016x} -->")
+        lines.append(f'  <testbench pt="0x{pt:016x}ULL" key_hi="0x{key >> 64:016x}ULL" '
+                     f'key_lo="0x{key & (2**64 - 1):016x}ULL"/>')
+    lines.append("</function>")
+    out = os.path.join(HERE, "test_top.xml")
     with open(out, "w") as f:
         f.write("\n".join(lines) + "\n")
     print(f"wrote {out}: {len(vectors)} vectors")

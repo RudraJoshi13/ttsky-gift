@@ -13,7 +13,7 @@ jobs:
   bambu:
     # Ubuntu 22.04: Bambu's bundled clang-16 needs libtinfo.so.5, which 24.04 no longer ships.
     runs-on: ubuntu-22.04
-    timeout-minutes: 60
+    timeout-minutes: 180
     env:
       BAMBU_VERSION: "2024.10"
     steps:
@@ -51,31 +51,42 @@ jobs:
           sudo apt-get install -y -q verilator libtinfo5 gcc-multilib g++-multilib
           verilator --version
 
-      - name: Write the testbench inputs (3 official + 5 random vectors)
+      - name: Write the testbench inputs (3 official + 5 random vectors, for both tops)
         run: python3 hls/gen_tb_xml.py
 
-      - name: Run Bambu (C to Verilog, then simulate the Verilog)
+      - name: Run Bambu on each configuration (C to Verilog, then simulate)
+        # A: reference C as before (baseline).
+        # B: same cipher code + unroll/inline pragmas + 64-bit top, -O3.
+        # C: B + --rom-duplication (lets the S-box table be read 16 times per cycle).
+        # D: C + the 28-round loop unrolled too (-DUNROLL_ROUNDS), fully combinational.
+        # Each configuration runs in its own folder; a failure does not stop the others.
         run: |
-          mkdir -p hls_out
-          cd hls_out
-          # The AppImage launcher changes into the folder named in OWD before
-          # starting bambu; set it here so bambu runs (and writes) in hls_out.
-          export OWD="$PWD"
-          bambu "$GITHUB_WORKSPACE/hls/gift64_hls.c" \
-            --top-fname=gift64_enc \
-            --device-name=nangate45 \
-            --clock-period=20 \
-            -O2 \
-            --generate-tb="$GITHUB_WORKSPACE/hls/test.xml" \
-            --simulate --simulator=VERILATOR \
-            -v3 2>&1 | tee bambu.log
-          status=${PIPESTATUS[0]}
-          ls -la
-          exit $status
+          W="$GITHUB_WORKSPACE/hls"
+          COMMON="--device-name=nangate45 --clock-period=20 --simulate --simulator=VERILATOR -v3"
+          run_cfg() {
+            name=$1; shift
+            mkdir -p "hls_out/$name"
+            ( cd "hls_out/$name"
+              export OWD="$PWD"
+              echo "bambu $*" > command.txt
+              timeout 45m bambu "$@" > bambu.log 2>&1
+              echo $? > exit_code.txt )
+            echo "config $name: exit $(cat hls_out/$name/exit_code.txt)"
+          }
+          run_cfg A "$W/gift64_hls.c"     --top-fname=gift64_enc -O2 --generate-tb="$W/test.xml"     $COMMON
+          run_cfg B "$W/gift64_hls_opt.c" --top-fname=gift64_top -O3 --generate-tb="$W/test_top.xml" $COMMON
+          run_cfg C "$W/gift64_hls_opt.c" --top-fname=gift64_top -O3 --rom-duplication --generate-tb="$W/test_top.xml" $COMMON
+          run_cfg D "$W/gift64_hls_opt.c" --top-fname=gift64_top -O3 --rom-duplication -DUNROLL_ROUNDS --generate-tb="$W/test_top.xml" $COMMON
 
-      - name: Summary (cycles and any errors)
+      - name: Summary (per configuration)
         if: always()
-        run: grep -i -E "cycles|error|mismatch|fail" hls_out/bambu.log | tail -40 || true
+        run: |
+          for c in A B C D; do
+            L="hls_out/$c/bambu.log"
+            echo "=== $c: exit $(cat hls_out/$c/exit_code.txt 2>/dev/null)"
+            grep -E "Average execution|Number of executions|Total number of flip-flops|Number of states|Estimated max frequency" "$L" | tail -6 || true
+            grep -i -E "mismatch|error" "$L" | tail -5 || true
+          done
 
       - name: Upload Bambu outputs
         if: always()
@@ -85,3 +96,4 @@ jobs:
           path: |
             hls_out
             hls/test.xml
+            hls/test_top.xml

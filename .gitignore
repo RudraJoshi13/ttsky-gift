@@ -15,3 +15,4 @@ sim/*.vvp
 sim/vectors/
 model/__pycache__/
 hls/test.xml
+hls/test_top.xml
