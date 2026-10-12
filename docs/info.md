@@ -34,8 +34,9 @@ time. The byte writes go directly into the core's own key and state registers.
 |------|----------|
 | `ui[4:0]` | byte address |
 | `ui[7]` | write strobe, active high (synchronised inside the chip) |
-| `ui[6:5]` | not used |
-| `uio[7:0]` | write data byte (all `uio` pins are inputs) |
+| `ui[5]` | scan enable, active high. Keep it low in normal use |
+| `ui[6]` | scan in (ignored while `ui[5]` is low) |
+| `uio[7:0]` | write data byte. All `uio` pins are inputs, except `uio[0]`, which becomes the scan output while `ui[5]` is high |
 | `uo[7:0]` | read data byte at the selected address (registered) |
 
 Multi-byte values are stored most significant byte first.
@@ -56,6 +57,8 @@ Reset clears busy, done, the round constant and the read data register. The key 
 so their contents are unknown after power-up or reset. Write the key and the plaintext before the first encryption.
 
 ## How to test
+
+Keep `ui[5]` (scan enable) low for normal use.
 
 1. Reset the chip.
 2. Write the 16 key bytes to addresses `0x00` to `0x0F`.
@@ -79,6 +82,30 @@ Test vectors from the GIFT designers' reference repository
 | `0000000000000000` | `00000000000000000000000000000000` | `f62bc3ef34f775ac` |
 | `fedcba9876543210` | `fedcba9876543210fedcba9876543210` | `c1b71f66160ff587` |
 | `c450c7727a9b8a7d` | `bd91731eb6bc2713a1f9f6ffc75044e7` | `e3272885fa94ba8b` |
+
+## Scan chain test
+
+The design also contains a scan chain for manufacturing test (design for test). It was inserted with
+Difetto (OpenROAD scan insertion with placement-aware chain ordering), so the layout is hardened locally
+and submitted as a custom GDS. All 212 flip-flops are in one chain. The chain is shifted on the normal
+clock `clk`. Scan in is `ui[6]`, scan out is `uio[0]`, and scan enable is `ui[5]`. While `ui[5]` is
+high, `uio[0]` is driven by the chip; while it is low, `uio[0]` is the normal `wdata[0]` input.
+
+One test pattern is applied as follows:
+
+1. Keep `rst_n` high. Release `uio[0]` (make it an input on the RP2040), then set `ui[5]` high.
+2. Shift the 212 flip-flop values in on `ui[6]`, one per rising clock edge.
+3. Set `ui[5]` low, then drive `uio[0]` again, and set the other `ui` and `uio` inputs from the pattern.
+   Check `uo[7:0]` against the expected values.
+4. Give one clock (the capture clock).
+5. Release `uio[0]`, set `ui[5]` high, and shift the 212 captured values out on `uio[0]` while the next
+   pattern shifts in.
+
+The test patterns were generated with quaigh: 241 patterns give 99.04% coverage of single stuck-at
+faults (5,980 of 6,038 collapsed faults). This number covers the logic after scan insertion; it does not
+include delay faults or the buffers added later during placement and routing. The chain itself is checked
+separately by shifting a known bit stream through it. All 241 patterns were replayed on the final routed
+gate-level netlist in simulation with no mismatches.
 
 ## External hardware
 
