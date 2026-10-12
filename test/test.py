@@ -154,7 +154,7 @@ async def test_busy_protection(dut):
 @cocotb.test()
 async def test_register_rules(dut):
     """Unused addresses read 0; writes to ID and unused addresses are ignored;
-    start needs bit 0; a held strobe starts once; ui_in[6:5] are ignored."""
+    start needs bit 0; a held strobe starts once; ui_in[6] is ignored."""
     await start_clock_and_reset(dut)
     pt, key, ct = OFFICIAL[1]
     assert await encrypt(dut, pt, key) == ct
@@ -192,12 +192,15 @@ async def test_register_rules(dut):
     assert await read_bytes(dut, A_STATE, 8) == ct, "wrong ciphertext after held strobe"
     dut._log.info("strobe held 120 clocks: exactly one encryption")
 
-    dut.ui_in.value = 0x60 | A_ID
+    # ui_in[5] is scan enable in the DFT version and must stay 0 in normal
+    # use (the scan chain itself is tested in gift_tt/test_dft). ui_in[6] is
+    # scan in, which is ignored while scan enable is 0.
+    dut.ui_in.value = 0x40 | A_ID
     await ClockCycles(dut.clk, 2)
-    assert dut.uo_out.value.to_unsigned() == 0x47, "ui_in[6:5] changed the read"
+    assert dut.uo_out.value.to_unsigned() == 0x47, "ui_in[6] changed the read"
     dut.ui_in.value = A_ID
     await ClockCycles(dut.clk, 2)
-    dut._log.info("ui_in[5] and ui_in[6] ignored")
+    dut._log.info("ui_in[6] ignored while scan enable (ui_in[5]) is 0")
 
 
 @cocotb.test()
